@@ -40,7 +40,6 @@ master.geometry("800x500")
 buttons = [[0 for x in range(len(numbers))] for y in range(len(colours))]
 myFont = tkinter.font.Font(size=30)
 
-
 def button_press(event):
     print(event)
 
@@ -56,7 +55,9 @@ for column, c_name in enumerate(colours):
         buttons[column][row].grid(row=row, column=column)
 
 
-def run_task(segment_length):
+def run_task():
+    # is_waiting = True
+    segment_length = random.choice(segment_lengths)
     talker_target, gender_target = random.choice(list(talkers.items()))
     talker_masker, gender_masker = random.choice([(t, g) for t, g in talkers.items()
                                                   if g == gender_target and t != talker_target])
@@ -84,23 +85,9 @@ def run_task(segment_length):
 
     combined = normalise_sound(combined)
     combined.play()
-    # with slab.key() as key:
-    #     response = key.getch() - 48
-    #     solution = name_to_int(number_target)
-    #     is_correct = int(response == solution)
-    #     seq.add_response({
-    #         "segment": segment_length,
-    #         "response": response,
-    #         "solution": solution,
-    #         "is_correct": is_correct
-    #     })
-    #     results_file.write(segment_length, tag="segment")
-    #     results_file.write(response, tag="response")
-    #     results_file.write(solution, tag="solution")
-    #     results_file.write(is_correct, tag="is_correct")
-    master.after(0, run_task)
+    master.after(4000, run_task)
 
 
-for segment_length in seq:
-    run_task(segment_length)
+run_task()
+master.mainloop()
 
