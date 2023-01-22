@@ -1,12 +1,13 @@
 call_sign_target = "07"
-masker_call_signs = {
+call_signs = {
     "Charlie": "00",
     "Ringo": "01",
     "Laker": "02",
     "Hopper": "03",
     "Arrow": "04",
     "Tiger": "05",
-    "Eagle": "06"
+    "Eagle": "06",
+    "Baron": "07"
 }
 colours = {
     "Blue": "00",
@@ -21,6 +22,7 @@ numbers = {
     "Four": "03",
     "Five": "04",
     "Six": "05",
+    "Seven": "06",
     "Eight": "07"
 }
 talkers = {
