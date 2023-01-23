@@ -98,7 +98,6 @@ def generate_numpad():
 def generate_name_and_numpad():
     buttons = [[0 for x in range(len(numbers))] for y in range(len(colours) + 1)]
     for row, call_sign in enumerate(call_signs):
-        print(row)
         buttons[0][row] = Button(master,
                                  text=call_sign)
         buttons[0][row].bind('<Button-1>', button_press)
@@ -108,16 +107,15 @@ def generate_name_and_numpad():
         for row, n_name in enumerate(numbers):
             button_text = name_to_int(numbers[n_name])
             buttons[column + 1][row] = Button(master,
-                                          text=str(button_text),
-                                          bg=col_to_hex[c_name])
+                                              text=str(button_text),
+                                              bg=col_to_hex[c_name])
             buttons[column + 1][row].bind('<Button-1>', button_press)
             buttons[column + 1][row]['font'] = myFont
             buttons[column + 1][row].grid(row=row, column=column + 1)
 
 
-generate_numpad()
-run_masking_experiment()
 # generate_name_and_numpad()
 # run_single_talker_experiment()
+generate_numpad()
+run_masking_experiment()
 master.mainloop()
-
