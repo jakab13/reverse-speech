@@ -11,23 +11,25 @@ DIR = pathlib.Path(os.getcwd())
 root_dir = DIR / "samples" / "CRM" / "original"
 files = os.listdir(root_dir)
 segments = [20, 40, 60, 80, 100, 120, 140]
-modulation_type = "helicopter"
+modulation_type = "reversed"
 
 for file in files:
     file_path = pathlib.Path(root_dir / file)
     sound = slab.Binaural(file_path)
     for segment_length_ms in segments:
         segment_length = slab.Signal.in_samples(segment_length_ms / 1000, sound.samplerate)
-        overlap = int(0.001 * SAMPLERATE)
+        overlap = int(0.005 * SAMPLERATE)
         reversed_sound = slab.Binaural.silence(duration=sound.n_samples, samplerate=sound.samplerate)
         border_range = np.arange(-overlap, overlap + 1)
         idx = 0
         noise_idx = 0
         while idx < sound.n_samples:
-            start = idx
-            end = idx + segment_length
+            start = idx - overlap if idx > overlap else idx
+            end = idx + segment_length + overlap if idx < sound.n_samples - segment_length - overlap else sound.n_samples
             snippet = sound.data[start:end]
             reversed_snippet = slab.Binaural(snippet[::-1], samplerate=sound.samplerate)
+            if reversed_snippet.n_samples > overlap * 2:
+                reversed_snippet = reversed_snippet.ramp(duration=overlap)
             reversed_sound.data[start:end] += reversed_snippet
             idx += segment_length
             # if len(border_range) < idx < sound.n_samples - len(border_range):
@@ -50,19 +52,19 @@ for file in files:
                 # plt.axvspan(border_range[0], border_range[-1], facecolor='0.2', alpha=0.1)
                 # plt.legend()
                 # plt.show()
-        out = slab.Binaural.silence(duration=overlap + reversed_sound.n_samples, samplerate=SAMPLERATE)
-        out.data[overlap:] = reversed_sound.data
-        noise = slab.Binaural.pinknoise(duration=len(border_range), kind="dichotic").ramp(duration=overlap)
-        while noise_idx < out.n_samples - noise.n_samples:
-            start = noise_idx
-            end = noise_idx + noise.n_samples
-            out.data[start:end, 0] = noise[:, 0]
-            out.data[start:end, 1] = noise[:, 1]
-            noise_idx += int(0.02 * SAMPLERATE)
-        out.left = out.left.filter(frequency=8000, kind="lp")
-        out.right = out.right.filter(frequency=8000, kind="lp")
+        # out = slab.Binaural.silence(duration=overlap + reversed_sound.n_samples, samplerate=SAMPLERATE)
+        # out.data[overlap:] = reversed_sound.data
+        # noise = slab.Binaural.pinknoise(duration=len(border_range), kind="dichotic").ramp(duration=overlap)
+        # while noise_idx < out.n_samples - noise.n_samples:
+        #     start = noise_idx
+        #     end = noise_idx + noise.n_samples
+        #     out.data[start:end, 0] = noise[:, 0]
+        #     out.data[start:end, 1] = noise[:, 1]
+        #     noise_idx += int(0.02 * SAMPLERATE)
+        reversed_sound.left = reversed_sound.left.filter(frequency=8000, kind="lp")
+        reversed_sound.right = reversed_sound.right.filter(frequency=8000, kind="lp")
         outdir = file_path.parent.parent / modulation_type / str(str(segment_length_ms) + "ms" + "_" + modulation_type)
         pathlib.Path(outdir).mkdir(parents=True, exist_ok=True)
         outfilename = outdir / str(file_path.stem + "_seg-" + str(segment_length_ms) + "ms" + "_" + modulation_type + ".wav")
-        out.write(outfilename)
+        # reversed_sound.write(outfilename)
 

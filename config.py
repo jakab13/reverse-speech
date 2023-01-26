@@ -41,5 +41,5 @@ col_to_hex = {
     "White": "#FFFFFF",
     "Green": "#1B998B"
 }
-segment_lengths = [25, 50, 75, 100, 150, 200]
+segment_lengths = [20, 40, 60, 80, 100, 120, 140]
 
