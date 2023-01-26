@@ -6,7 +6,7 @@ import numpy as np
 import tkinter
 from tkmacosx import Button
 from functools import partial
-from config import (call_sign_target, call_signs, colours, numbers, talkers, col_to_hex, segment_lengths)
+from config import call_sign_target, call_signs, colours, numbers, talkers, col_to_hex, segment_lengths
 
 DIR = pathlib.Path(os.getcwd())
 root_dir = DIR / "samples" / "CRM" / "reversed"
@@ -44,7 +44,7 @@ master.geometry("800x500")
 myFont = tkinter.font.Font(size=30)
 
 
-def generate_helicopter(duration=1.0, spike_width=0.005, segment_length=0.02, samplerate=44100):
+def generate_helicopter(duration=1.0, spike_width=0.005, segment_length=0.02, samplerate=44100, spike_idx_array=None):
     duration = slab.Signal.in_samples(duration, samplerate=samplerate)
     spike_width = slab.Signal.in_samples(spike_width, samplerate=samplerate)
     spike_half_width = int(spike_width/2)
@@ -52,7 +52,11 @@ def generate_helicopter(duration=1.0, spike_width=0.005, segment_length=0.02, sa
     spike = slab.Binaural.pinknoise(duration=spike_width)
     spike = spike.ramp(duration=int(spike_width/2)-1)
     helicopter = slab.Binaural.silence(duration=duration)
-    for spike_idx in range(segment_length, duration - segment_length, segment_length):
+    if spike_idx_array is None:
+        spike_idx_array = range(segment_length, duration - segment_length, segment_length)
+    else:
+        spike_idx_array = [idx for idx in spike_idx_array if idx < duration-segment_length]
+    for spike_idx in spike_idx_array:
         start = spike_idx - spike_half_width
         end = spike_idx + spike_half_width
         helicopter.data[start:end] = spike.data
