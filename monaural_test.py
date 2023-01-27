@@ -81,9 +81,16 @@ def random_stimulus(segment_length=25, call_sign=None, gender="random"):
     return stimulus, talker, gender, call_sign, colour, number
 
 
+task = dict()
+
 def run_masking_trial(event=None, add_helicopter=True):
     global THIS_TRIAL
+    global task
     if event is not None:
+        is_correct = False
+        if event["colour"] == task["colour"] and event["number"] == task["number"]:
+            is_correct = True
+        event["is_correct"] = is_correct
         results_file.write(event, tag="response")
         print(THIS_TRIAL - 1, "Response:", event["colour"], event["number"])
         print('')
@@ -101,6 +108,7 @@ def run_masking_trial(event=None, add_helicopter=True):
         combined.data += helicopter
     combined = normalise_sound(combined)
     task = {
+        "segment_length": segment_length,
         "target_talker": target_talker,
         "target_gender": target_gender,
         "masker_talker": masker_talker,
