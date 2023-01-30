@@ -9,12 +9,12 @@ from functools import partial
 from config import call_sign_target, call_signs, colours, numbers, talkers, col_to_hex, segment_lengths
 
 DIR = pathlib.Path(os.getcwd())
-root_dir = DIR / "samples" / "CRM" / "reversed"
+root_dir = DIR / "samples" / "CRM"
 
 
-def create_name(talker, call_sign, colour, number, segment):
+def create_name(talker, call_sign, colour, number):
     base_string = talker + call_sign + colour + number
-    name = base_string + "_seg-" + str(segment) + "ms" + "_reversed" + '.wav'
+    name = base_string
     return name
 
 
@@ -35,8 +35,9 @@ subject_ID = 'jakab'
 slab.ResultsFile.results_folder = 'results'
 results_file = slab.ResultsFile(subject=subject_ID)
 seq = slab.Trialsequence(segment_lengths, n_reps=10)
-target_level_diff = -3
+target_level_diff = -9
 THIS_TRIAL = 0
+task = dict()
 
 master = tkinter.Tk()
 master.title("Responses")
@@ -63,25 +64,55 @@ def generate_helicopter(duration=1.0, spike_width=0.005, segment_length=0.02, sa
     return helicopter
 
 
-def random_stimulus(segment_length=25, call_sign=None, gender="random"):
-    if gender == "random":
-        talker, gender = random.choice(list(talkers.items()))
+def get_stimulus(params):
+    talker, call_sign, colour, number, segment_length = \
+        params["talker"], params["call_sign"], params["colour"], params["number"], params["segment_length"]
+    file_name = create_name(talker, call_sign, colour, number)
+    if params["stim_type"] == "target":
+        path = root_dir / "original" / str(file_name + '.wav')
     else:
-        talker, gender = random.choice([(t, g) for t, g in talkers.items() if g == gender])
-    if call_sign == "Baron":
-        call_sign = call_sign_target
-    else:
-        call_sign = random.choice([cs_id for (cs, cs_id) in call_signs.items() if cs != "Baron"])
-    colour = random.choice(list(colours.values()))
-    number = random.choice([num_string for num_name, num_string in numbers.items() if num_name != "Seven"])
-    file_name = create_name(talker, call_sign, colour, number, segment_length)
-    path = root_dir / str(str(segment_length) + "ms_reversed") / file_name
+        path = root_dir / "reversed" / str(str(segment_length) + "ms_reversed") / str(file_name + "_seg-" + str(segment_length) + "ms" + "_reversed" + '.wav')
     stimulus = slab.Binaural(path)
     stimulus = normalise_sound(stimulus)
-    return stimulus, talker, gender, call_sign, colour, number
+    return stimulus
 
 
-task = dict()
+def get_params(stim_type="target"):
+    params = {"stim_type": stim_type}
+    talker, gender = random.choice(list(talkers.items()))
+    if stim_type == "target":
+        call_sign = call_sign_target  # Baron
+        segment_length = segment_lengths[0]
+    else:
+        call_sign = random.choice([cs_id for (cs, cs_id) in call_signs.items() if cs != "Baron"])
+        segment_length = random.choice(segment_lengths)
+    colour = random.choice(list(colours.values()))
+    number = random.choice([num_string for num_name, num_string in numbers.items() if num_name != "Seven"])
+    params["talker"] = talker
+    params["gender"] = gender
+    params["call_sign"] = call_sign
+    params["colour"] = colour
+    params["number"] = number
+    params["segment_length"] = segment_length
+    return params
+
+
+def random_stimulus():
+    params = get_params()
+    stimulus = get_stimulus(params)
+    return stimulus, params
+
+def combine_sounds(target, masker, add_helicopter=True):
+    max_duration = max([masker.n_samples, target.n_samples])
+    combined = slab.Binaural.silence(duration=max_duration, samplerate=target.samplerate)
+    combined.data[:target.n_samples] = target.data
+    combined.data[:masker.n_samples] += masker.data
+    if add_helicopter:
+        helicopter = generate_helicopter(duration=max_duration, samplerate=target.samplerate)
+        combined.data += helicopter
+    combined = normalise_sound(combined)
+    return combined
+
 
 def run_masking_trial(event=None, add_helicopter=True):
     global THIS_TRIAL
@@ -95,27 +126,21 @@ def run_masking_trial(event=None, add_helicopter=True):
         print(THIS_TRIAL - 1, "Response:", event["colour"], event["number"])
         print('')
     master.update()
-    segment_length = random.choice(segment_lengths)
-    target, target_talker, target_gender, target_call_sign, target_colour, target_number = random_stimulus(call_sign="Baron")
-    masker, masker_talker, masker_gender, masker_call_sign, master_colour, master_number = random_stimulus(segment_length=segment_length, gender=target_gender)
-    max_duration = max([masker.n_samples, target.n_samples])
+    target_params = get_params(stim_type="target")
+    masker_params = get_params(stim_type="masker")
+    target = get_stimulus(target_params)
+    masker = get_stimulus(masker_params)
     target.level += target_level_diff
-    combined = slab.Binaural.silence(duration=max_duration, samplerate=target.samplerate)
-    combined.data[:target.n_samples] = target.data
-    combined.data[:masker.n_samples] += masker.data
-    if add_helicopter:
-        helicopter = generate_helicopter(duration=max_duration, samplerate=target.samplerate)
-        combined.data += helicopter
-    combined = normalise_sound(combined)
+    combined = combine_sounds(target, masker, add_helicopter=add_helicopter)
     task = {
-        "segment_length": segment_length,
-        "target_talker": target_talker,
-        "target_gender": target_gender,
-        "masker_talker": masker_talker,
-        "masker_gender": masker_gender,
-        "masker_call_sign": value_to_key(call_signs, masker_call_sign),
-        "colour": value_to_key(colours, target_colour),
-        "number": value_to_key(numbers, target_number),
+        "segment_length": masker_params["segment_length"],
+        "target_talker": target_params["talker"],
+        "target_gender": target_params["gender"],
+        "masker_talker": masker_params["talker"],
+        "masker_gender": masker_params["gender"],
+        "masker_call_sign": value_to_key(call_signs, masker_params["call_sign"]),
+        "colour": value_to_key(colours, target_params["colour"]),
+        "number": value_to_key(numbers, target_params["number"]),
         "target_level_diff": target_level_diff
     }
     results_file.write(THIS_TRIAL, tag="trial_num")
@@ -152,7 +177,7 @@ def generate_name_and_numpad():
     for row, call_sign in enumerate(call_signs):
         buttons[0][row] = Button(master,
                                  text=call_sign,
-                                 command=partial(set_call_sign, call_sign))
+                                 command=partial(run_single_talker_trial, call_sign))
         buttons[0][row]['font'] = myFont
         buttons[0][row].grid(row=row, column=0)
     for column, c_name in enumerate(colours):
@@ -184,3 +209,15 @@ def run_single_talker_experiment():
 
 
 run_masking_experiment()
+
+# output = slab.Binaural.silence(samplerate=40000)
+# silence = slab.Binaural.silence(duration=1.5, samplerate=40000)
+# for i in range(10):
+#     target_params = get_params(stim_type="target")
+#     masker_params = get_params(stim_type="masker")
+#     target = get_stimulus(target_params)
+#     masker = get_stimulus(masker_params)
+#     target.level += target_level_diff
+#     combined = combine_sounds(target, masker, add_helicopter=True)
+#     output = slab.Binaural.sequence(output, combined, silence)
+# output.play()
