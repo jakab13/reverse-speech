@@ -29,8 +29,8 @@ talkers = {
     "00": "male",
     "01": "male",
     "02": "male",
-    "03": "male",
-    "04": "female",
+    # "03": "male",
+    # "04": "female",
     "05": "female",
     "06": "female",
     "07": "female"
@@ -41,5 +41,6 @@ col_to_hex = {
     "White": "#FFFFFF",
     "Green": "#1B998B"
 }
-segment_lengths = [20, 40, 60, 80, 100, 120, 140]
-
+segment_lengths = [0.015, 0.030, 0.045, 0.060, 0.075, 0.090, 0.105, 0.120, 0.135, 0.150, 0.165]
+target_segment_length = 0.060
+target_level_diff = 0

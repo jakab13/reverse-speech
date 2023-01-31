@@ -6,7 +6,7 @@ import numpy as np
 import tkinter
 from tkmacosx import Button
 from functools import partial
-from config import call_sign_target, call_signs, colours, numbers, talkers, col_to_hex, segment_lengths
+from config import *
 
 DIR = pathlib.Path(os.getcwd())
 root_dir = DIR / "samples" / "CRM"
@@ -33,12 +33,11 @@ def normalise_sound(sound):
 
 subject_ID = 'jakab'
 slab.ResultsFile.results_folder = 'results'
-results_file = slab.ResultsFile(subject=subject_ID)
+results_file = slab.ResultsFile()
 seq = slab.Trialsequence(segment_lengths, n_reps=10)
-target_level_diff = -9
 THIS_TRIAL = 0
+CALL_SIGN = None
 task = dict()
-
 master = tkinter.Tk()
 master.title("Responses")
 master.geometry("800x500")
@@ -68,21 +67,29 @@ def get_stimulus(params):
     talker, call_sign, colour, number, segment_length = \
         params["talker"], params["call_sign"], params["colour"], params["number"], params["segment_length"]
     file_name = create_name(talker, call_sign, colour, number)
-    if params["stim_type"] == "target":
-        path = root_dir / "original" / str(file_name + '.wav')
-    else:
-        path = root_dir / "reversed" / str(str(segment_length) + "ms_reversed") / str(file_name + "_seg-" + str(segment_length) + "ms" + "_reversed" + '.wav')
+    path = root_dir / "original" / str(file_name + ".wav")
     stimulus = slab.Binaural(path)
-    stimulus = normalise_sound(stimulus)
     return stimulus
 
 
-def get_params(stim_type="target"):
+def get_gender_mix(gender1, gender2):
+    if gender1 == gender2:
+        mix = gender1
+    else:
+        mix = "opposite"
+    return mix
+
+
+def get_params(stim_type="target", filter_params=None):
     params = {"stim_type": stim_type}
-    talker, gender = random.choice(list(talkers.items()))
+    if isinstance(filter_params, dict) and "gender" in filter_params:
+        gender = filter_params["gender"]
+        talker, _ = random.choice([(k, v) for (k, v) in talkers.items() if v == gender])
+    else:
+        talker, gender = random.choice(list(talkers.items()))
     if stim_type == "target":
         call_sign = call_sign_target  # Baron
-        segment_length = segment_lengths[0]
+        segment_length = target_segment_length
     else:
         call_sign = random.choice([cs_id for (cs, cs_id) in call_signs.items() if cs != "Baron"])
         segment_length = random.choice(segment_lengths)
@@ -102,60 +109,122 @@ def random_stimulus():
     stimulus = get_stimulus(params)
     return stimulus, params
 
+
+def reverse_sound(sound, segment_length):
+    segment_length = slab.Signal.in_samples(segment_length, sound.samplerate)
+    overlap = int(0.005 * sound.samplerate)
+    reversed_sound = slab.Binaural.silence(duration=sound.n_samples, samplerate=sound.samplerate)
+    idx = 0
+    while idx < sound.n_samples:
+        start = idx - overlap if idx > overlap else idx
+        end = idx + segment_length + overlap if idx < sound.n_samples - segment_length - overlap else sound.n_samples
+        snippet = sound.data[start:end]
+        reversed_snippet = slab.Binaural(snippet[::-1], samplerate=sound.samplerate)
+        if reversed_snippet.n_samples > overlap * 2:
+            reversed_snippet = reversed_snippet.ramp(duration=overlap)
+        reversed_sound.data[start:end] += reversed_snippet
+        idx += segment_length
+    reversed_sound = reversed_sound.ramp(duration=overlap, when="offset")
+    reversed_sound.left = reversed_sound.left.filter(frequency=8000, kind="lp")
+    reversed_sound.right = reversed_sound.right.filter(frequency=8000, kind="lp")
+    return reversed_sound
+
+
 def combine_sounds(target, masker, add_helicopter=True):
     max_duration = max([masker.n_samples, target.n_samples])
     combined = slab.Binaural.silence(duration=max_duration, samplerate=target.samplerate)
     combined.data[:target.n_samples] = target.data
     combined.data[:masker.n_samples] += masker.data
     if add_helicopter:
-        helicopter = generate_helicopter(duration=max_duration, samplerate=target.samplerate)
+        helicopter = generate_helicopter(duration=max_duration, segment_length=min(segment_lengths), samplerate=target.samplerate)
         combined.data += helicopter
     combined = normalise_sound(combined)
     return combined
 
 
-def run_masking_trial(event=None, add_helicopter=True):
+def get_score(button_press, solution):
+    score = 0
+    if "call_sign" in button_press:
+        denum = len(call_signs) + len(colours) + len(numbers) - 1
+        if button_press["call_sign"] == solution["call_sign"]:
+            score += len(call_signs) / denum
+    else:
+        denum = len(colours) + len(numbers) - 1
+    if button_press["colour"] == solution["colour"]:
+        score += len(colours) / denum
+    if button_press["number"] == solution["number"]:
+        score += (len(numbers) - 1) / denum
+    return score
+
+
+def run_masking_trial(button_press=None, add_helicopter=True):
     global THIS_TRIAL
     global task
-    if event is not None:
-        is_correct = False
-        if event["colour"] == task["colour"] and event["number"] == task["number"]:
-            is_correct = True
-        event["is_correct"] = is_correct
-        results_file.write(event, tag="response")
-        print(THIS_TRIAL - 1, "Response:", event["colour"], event["number"])
+    if button_press is not None:
+        button_press["score"] = get_score(button_press, task)
+        results_file.write(button_press, tag="response")
+        print(THIS_TRIAL - 1, "Response:", button_press["colour"], button_press["number"])
         print('')
     master.update()
     target_params = get_params(stim_type="target")
     masker_params = get_params(stim_type="masker")
     target = get_stimulus(target_params)
+    target = reverse_sound(target, target_params["segment_length"])
     masker = get_stimulus(masker_params)
+    masker = reverse_sound(masker, masker_params["segment_length"])
     target.level += target_level_diff
     combined = combine_sounds(target, masker, add_helicopter=add_helicopter)
     task = {
-        "segment_length": masker_params["segment_length"],
+        "target_segment_length": target_segment_length,
+        "masker_segment_length": masker_params["segment_length"],
         "target_talker": target_params["talker"],
         "target_gender": target_params["gender"],
         "masker_talker": masker_params["talker"],
         "masker_gender": masker_params["gender"],
+        "gender_mix": get_gender_mix(target_params["gender"], masker_params["gender"]),
         "masker_call_sign": value_to_key(call_signs, masker_params["call_sign"]),
         "colour": value_to_key(colours, target_params["colour"]),
         "number": value_to_key(numbers, target_params["number"]),
         "target_level_diff": target_level_diff
     }
-    results_file.write(THIS_TRIAL, tag="trial_num")
     results_file.write(task, tag="task")
     print(THIS_TRIAL, "Task:    ", task["colour"], task["number"])
     combined.play()
     THIS_TRIAL += 1
 
 
-def run_single_talker_trial(event=None):
-    print(event)
+def run_single_talker_trial(button_press=None):
+    global THIS_TRIAL
+    global CALL_SIGN
+    global task
+    if button_press is not None:
+        button_press["call_sign"] = CALL_SIGN
+        button_press["score"] = get_score(button_press, task)
+        results_file.write(button_press, tag="response")
+        print(THIS_TRIAL - 1, "Response:", CALL_SIGN, button_press["colour"], button_press["number"])
+        print('')
     master.update()
     segment_length = random.choice(segment_lengths)
-    stimulus, _, _, _, _, _ = random_stimulus(segment_length=segment_length)
-    stimulus.play()
+    single_talker_params = get_params(stim_type="random")
+    single_talker = get_stimulus(single_talker_params)
+    single_talker = reverse_sound(single_talker, segment_length)
+    task = {
+        "single_talker_segment_length": segment_length,
+        "single_talker": single_talker_params["talker"],
+        "single_talker_gender": single_talker_params["gender"],
+        "call_sign": value_to_key(call_signs, single_talker_params["call_sign"]),
+        "colour": value_to_key(colours, single_talker_params["colour"]),
+        "number": value_to_key(numbers, single_talker_params["number"])
+    }
+    results_file.write(task, tag="task")
+    print(THIS_TRIAL, "Task:    ", task["call_sign"], task["colour"], task["number"])
+    single_talker.play()
+    THIS_TRIAL += 1
+
+
+def set_call_sign(call_sign):
+    global CALL_SIGN
+    CALL_SIGN = call_sign
 
 
 def generate_numpad():
@@ -177,7 +246,7 @@ def generate_name_and_numpad():
     for row, call_sign in enumerate(call_signs):
         buttons[0][row] = Button(master,
                                  text=call_sign,
-                                 command=partial(run_single_talker_trial, call_sign))
+                                 command=partial(set_call_sign, call_sign))
         buttons[0][row]['font'] = myFont
         buttons[0][row].grid(row=row, column=0)
     for column, c_name in enumerate(colours):
@@ -187,13 +256,17 @@ def generate_name_and_numpad():
             buttons[column + 1][row] = Button(master,
                                               text=str(button_text),
                                               bg=col_to_hex[c_name],
-                                              command=partial(run_single_talker_experiment, text_params))
+                                              command=partial(run_single_talker_trial, text_params))
             buttons[column + 1][row]['font'] = myFont
             buttons[column + 1][row].grid(row=row, column=column + 1)
 
 
 def run_masking_experiment():
     global THIS_TRIAL
+    global results_file
+    results_filename = "target-segment-" + str(int(target_segment_length * 1000)) + "ms"
+    results_filename += "_SNR-" + str(target_level_diff) + "dB"
+    results_file = slab.ResultsFile(subject=subject_ID, filename=results_filename)
     THIS_TRIAL = 1
     generate_numpad()
     run_masking_trial()
@@ -203,12 +276,16 @@ def run_masking_experiment():
 def run_single_talker_experiment():
     global THIS_TRIAL
     THIS_TRIAL = 1
+    global results_file
+    results_filename = "single-talker"
+    results_file = slab.ResultsFile(subject=subject_ID, filename=results_filename)
     generate_name_and_numpad()
     run_single_talker_trial()
     master.mainloop()
 
 
-run_masking_experiment()
+# run_masking_experiment()
+run_single_talker_experiment()
 
 # output = slab.Binaural.silence(samplerate=40000)
 # silence = slab.Binaural.silence(duration=1.5, samplerate=40000)
@@ -221,3 +298,4 @@ run_masking_experiment()
 #     combined = combine_sounds(target, masker, add_helicopter=True)
 #     output = slab.Binaural.sequence(output, combined, silence)
 # output.play()
+
