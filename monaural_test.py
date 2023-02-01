@@ -31,7 +31,7 @@ def normalise_sound(sound):
     return sound
 
 
-subject_ID = 'jakab'
+subject_ID = 'test'
 slab.ResultsFile.results_folder = 'results'
 results_file = slab.ResultsFile()
 seq = slab.Trialsequence(segment_lengths, n_reps=10)
@@ -157,7 +157,7 @@ def get_score(button_press, solution):
     return score
 
 
-def run_masking_trial(button_press=None, add_helicopter=True):
+def run_masking_trial(button_press=None, add_helicopter=False):
     global THIS_TRIAL
     global task
     if button_press is not None:
@@ -284,8 +284,8 @@ def run_single_talker_experiment():
     master.mainloop()
 
 
-# run_masking_experiment()
-run_single_talker_experiment()
+run_masking_experiment()
+# run_single_talker_experiment()
 
 # output = slab.Binaural.silence(samplerate=40000)
 # silence = slab.Binaural.silence(duration=1.5, samplerate=40000)
