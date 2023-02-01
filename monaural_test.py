@@ -34,7 +34,7 @@ def normalise_sound(sound):
 subject_ID = 'jakab'
 slab.ResultsFile.results_folder = 'results'
 results_file = slab.ResultsFile()
-seq = slab.Trialsequence(segment_lengths, n_reps=10)
+seq = slab.Trialsequence(segment_lengths, n_reps=5)
 THIS_TRIAL = 0
 CALL_SIGN = None
 task = dict()
@@ -81,8 +81,9 @@ def get_gender_mix(gender1, gender2):
 
 
 def get_params(stim_type="target", filter_params=None):
+    global THIS_TRIAL
     params = {"stim_type": stim_type}
-    segment_length = random.choice(segment_lengths)
+    segment_length = seq.get_future_trial(THIS_TRIAL)
     if isinstance(filter_params, dict) and "gender" in filter_params:
         gender = filter_params["gender"]
         talker, _ = random.choice([(k, v) for (k, v) in talkers.items() if v == gender])
@@ -167,7 +168,10 @@ def run_masking_trial(response=None, add_helicopter=False):
         results_file.write(response, tag="response")
         print(THIS_TRIAL - 1, "Response:", response["response_colour"], response["response_number"])
         print('')
-    master.update()
+    if THIS_TRIAL < seq.n_trials:
+        master.update()
+    else:
+        master.destroy()
     target_params = get_params(stim_type="target")
     masker_params = get_params(stim_type="masker")
     target = get_stimulus(target_params)
@@ -204,9 +208,14 @@ def run_single_talker_trial(response=None):
         response["response_call_sign"] = CALL_SIGN
         response["score"] = get_score(response, task)
         results_file.write(response, tag="response")
-        print(THIS_TRIAL - 1, "Response:", CALL_SIGN, response["response_colour"], response["response_number"])
-        print('')
-    master.update()
+        if THIS_TRIAL <= seq.n_trials:
+            print(THIS_TRIAL - 1, "Response:", CALL_SIGN, response["response_colour"], response["response_number"])
+            print('')
+    if THIS_TRIAL <= seq.n_trials:
+        master.update()
+    else:
+        master.destroy()
+        return
     segment_length = random.choice(segment_lengths)
     single_talker_params = get_params(stim_type="random")
     single_talker = get_stimulus(single_talker_params)
@@ -289,8 +298,8 @@ def run_single_talker_experiment():
     master.mainloop()
 
 
-run_masking_experiment()
-# run_single_talker_experiment()
+# run_masking_experiment()
+run_single_talker_experiment()
 
 
 
