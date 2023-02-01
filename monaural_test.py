@@ -31,7 +31,7 @@ def normalise_sound(sound):
     return sound
 
 
-subject_ID = 'test'
+subject_ID = 'jakab'
 slab.ResultsFile.results_folder = 'results'
 results_file = slab.ResultsFile()
 seq = slab.Trialsequence(segment_lengths, n_reps=10)
@@ -82,6 +82,7 @@ def get_gender_mix(gender1, gender2):
 
 def get_params(stim_type="target", filter_params=None):
     params = {"stim_type": stim_type}
+    segment_length = random.choice(segment_lengths)
     if isinstance(filter_params, dict) and "gender" in filter_params:
         gender = filter_params["gender"]
         talker, _ = random.choice([(k, v) for (k, v) in talkers.items() if v == gender])
@@ -90,9 +91,10 @@ def get_params(stim_type="target", filter_params=None):
     if stim_type == "target":
         call_sign = call_sign_target  # Baron
         segment_length = target_segment_length
+    elif stim_type == "random":
+        call_sign = random.choice(list(call_signs.values()))
     else:
         call_sign = random.choice([cs_id for (cs, cs_id) in call_signs.items() if cs != "Baron"])
-        segment_length = random.choice(segment_lengths)
     colour = random.choice(list(colours.values()))
     number = random.choice([num_string for num_name, num_string in numbers.items() if num_name != "Seven"])
     params["talker"] = talker
@@ -142,28 +144,28 @@ def combine_sounds(target, masker, add_helicopter=True):
     return combined
 
 
-def get_score(button_press, solution):
+def get_score(response, task):
     score = 0
-    if "call_sign" in button_press:
+    if "response_call_sign" in response:
         denum = len(call_signs) + len(colours) + len(numbers) - 1
-        if button_press["call_sign"] == solution["call_sign"]:
+        if response["response_call_sign"] == task["task_call_sign"]:
             score += len(call_signs) / denum
     else:
         denum = len(colours) + len(numbers) - 1
-    if button_press["colour"] == solution["colour"]:
+    if response["response_colour"] == task["task_colour"]:
         score += len(colours) / denum
-    if button_press["number"] == solution["number"]:
+    if response["response_number"] == task["task_number"]:
         score += (len(numbers) - 1) / denum
     return score
 
 
-def run_masking_trial(button_press=None, add_helicopter=False):
+def run_masking_trial(response=None, add_helicopter=False):
     global THIS_TRIAL
     global task
-    if button_press is not None:
-        button_press["score"] = get_score(button_press, task)
-        results_file.write(button_press, tag="response")
-        print(THIS_TRIAL - 1, "Response:", button_press["colour"], button_press["number"])
+    if response is not None:
+        response["score"] = get_score(response, task)
+        results_file.write(response, tag="response")
+        print(THIS_TRIAL - 1, "Response:", response["response_colour"], response["response_number"])
         print('')
     master.update()
     target_params = get_params(stim_type="target")
@@ -175,6 +177,7 @@ def run_masking_trial(button_press=None, add_helicopter=False):
     target.level += target_level_diff
     combined = combine_sounds(target, masker, add_helicopter=add_helicopter)
     task = {
+        "subject_ID": subject_ID,
         "target_segment_length": target_segment_length,
         "masker_segment_length": masker_params["segment_length"],
         "target_talker": target_params["talker"],
@@ -183,25 +186,25 @@ def run_masking_trial(button_press=None, add_helicopter=False):
         "masker_gender": masker_params["gender"],
         "gender_mix": get_gender_mix(target_params["gender"], masker_params["gender"]),
         "masker_call_sign": value_to_key(call_signs, masker_params["call_sign"]),
-        "colour": value_to_key(colours, target_params["colour"]),
-        "number": value_to_key(numbers, target_params["number"]),
+        "task_colour": value_to_key(colours, target_params["colour"]),
+        "task_number": value_to_key(numbers, target_params["number"]),
         "target_level_diff": target_level_diff
     }
     results_file.write(task, tag="task")
-    print(THIS_TRIAL, "Task:    ", task["colour"], task["number"])
+    print(THIS_TRIAL, "Task:    ", task["task_colour"], task["task_number"])
     combined.play()
     THIS_TRIAL += 1
 
 
-def run_single_talker_trial(button_press=None):
+def run_single_talker_trial(response=None):
     global THIS_TRIAL
     global CALL_SIGN
     global task
-    if button_press is not None:
-        button_press["call_sign"] = CALL_SIGN
-        button_press["score"] = get_score(button_press, task)
-        results_file.write(button_press, tag="response")
-        print(THIS_TRIAL - 1, "Response:", CALL_SIGN, button_press["colour"], button_press["number"])
+    if response is not None:
+        response["response_call_sign"] = CALL_SIGN
+        response["score"] = get_score(response, task)
+        results_file.write(response, tag="response")
+        print(THIS_TRIAL - 1, "Response:", CALL_SIGN, response["response_colour"], response["response_number"])
         print('')
     master.update()
     segment_length = random.choice(segment_lengths)
@@ -209,15 +212,16 @@ def run_single_talker_trial(button_press=None):
     single_talker = get_stimulus(single_talker_params)
     single_talker = reverse_sound(single_talker, segment_length)
     task = {
+        "subject_ID": subject_ID,
         "single_talker_segment_length": segment_length,
         "single_talker": single_talker_params["talker"],
         "single_talker_gender": single_talker_params["gender"],
-        "call_sign": value_to_key(call_signs, single_talker_params["call_sign"]),
-        "colour": value_to_key(colours, single_talker_params["colour"]),
-        "number": value_to_key(numbers, single_talker_params["number"])
+        "task_call_sign": value_to_key(call_signs, single_talker_params["call_sign"]),
+        "task_colour": value_to_key(colours, single_talker_params["colour"]),
+        "task_number": value_to_key(numbers, single_talker_params["number"])
     }
     results_file.write(task, tag="task")
-    print(THIS_TRIAL, "Task:    ", task["call_sign"], task["colour"], task["number"])
+    print(THIS_TRIAL, "Task:    ", task["task_call_sign"], task["task_colour"], task["task_number"])
     single_talker.play()
     THIS_TRIAL += 1
 
@@ -231,12 +235,12 @@ def generate_numpad():
     buttons = [[0 for x in range(len(numbers))] for y in range(len(colours))]
     for column, c_name in enumerate(colours):
         for row, n_name in enumerate(numbers):
-            text_params = {"colour": c_name, "number": n_name}
+            response_params = {"response_colour": c_name, "response_number": n_name}
             button_text = name_to_int(numbers[n_name])
             buttons[column][row] = Button(master,
                                           text=str(button_text),
                                           bg=col_to_hex[c_name],
-                                          command=partial(run_masking_trial, text_params))
+                                          command=partial(run_masking_trial, response_params))
             buttons[column][row]['font'] = myFont
             buttons[column][row].grid(row=row, column=column)
 
@@ -251,12 +255,12 @@ def generate_name_and_numpad():
         buttons[0][row].grid(row=row, column=0)
     for column, c_name in enumerate(colours):
         for row, n_name in enumerate(numbers):
-            text_params = {"colour": c_name, "number": n_name}
+            response_params = {"response_colour": c_name, "response_number": n_name}
             button_text = name_to_int(numbers[n_name])
             buttons[column + 1][row] = Button(master,
                                               text=str(button_text),
                                               bg=col_to_hex[c_name],
-                                              command=partial(run_single_talker_trial, text_params))
+                                              command=partial(run_single_talker_trial, response_params))
             buttons[column + 1][row]['font'] = myFont
             buttons[column + 1][row].grid(row=row, column=column + 1)
 
@@ -264,7 +268,8 @@ def generate_name_and_numpad():
 def run_masking_experiment():
     global THIS_TRIAL
     global results_file
-    results_filename = "target-segment-" + str(int(target_segment_length * 1000)) + "ms"
+    results_filename = "multi-talker"
+    results_filename += "_target-segment-" + str(int(target_segment_length * 1000)) + "ms"
     results_filename += "_SNR-" + str(target_level_diff) + "dB"
     results_file = slab.ResultsFile(subject=subject_ID, filename=results_filename)
     THIS_TRIAL = 1
@@ -287,15 +292,5 @@ def run_single_talker_experiment():
 run_masking_experiment()
 # run_single_talker_experiment()
 
-# output = slab.Binaural.silence(samplerate=40000)
-# silence = slab.Binaural.silence(duration=1.5, samplerate=40000)
-# for i in range(10):
-#     target_params = get_params(stim_type="target")
-#     masker_params = get_params(stim_type="masker")
-#     target = get_stimulus(target_params)
-#     masker = get_stimulus(masker_params)
-#     target.level += target_level_diff
-#     combined = combine_sounds(target, masker, add_helicopter=True)
-#     output = slab.Binaural.sequence(output, combined, silence)
-# output.play()
+
 
