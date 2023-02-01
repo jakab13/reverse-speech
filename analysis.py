@@ -10,13 +10,14 @@ subjects = [f for f in subjects if f != 'test']
 
 
 def generate_df(results_file_paths):
-    df = pd.DataFrame
+    df = pd.DataFrame()
     for results_file_path in results_file_paths:
         tasks = slab.ResultsFile.read_file(subject_path / results_file_path, tag="task")
         responses = slab.ResultsFile.read_file(subject_path / results_file_path, tag="response")
         df_tasks = pd.DataFrame(tasks)
         df_responses = pd.DataFrame(responses)
-        df = pd.concat([df_tasks, df_responses], axis=1)
+        df_block = pd.concat([df_tasks, df_responses], axis=1)
+        df = df.append(df_block, ignore_index=True)
     return df
 
 
