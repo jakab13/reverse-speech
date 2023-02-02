@@ -216,13 +216,12 @@ def run_single_talker_trial(response=None):
     else:
         master.destroy()
         return
-    segment_length = random.choice(segment_lengths)
     single_talker_params = get_params(stim_type="random")
     single_talker = get_stimulus(single_talker_params)
-    single_talker = reverse_sound(single_talker, segment_length)
+    single_talker = reverse_sound(single_talker, single_talker_params["segment_length"])
     task = {
         "subject_ID": subject_ID,
-        "single_talker_segment_length": segment_length,
+        "single_talker_segment_length": single_talker_params["segment_length"],
         "single_talker": single_talker_params["talker"],
         "single_talker_gender": single_talker_params["gender"],
         "task_call_sign": value_to_key(call_signs, single_talker_params["call_sign"]),
@@ -300,6 +299,4 @@ def run_single_talker_experiment():
 
 # run_masking_experiment()
 run_single_talker_experiment()
-
-
 
