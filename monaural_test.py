@@ -7,9 +7,13 @@ import tkinter
 from tkmacosx import Button
 from functools import partial
 from config import *
+import pyloudnorm as pyln
 
 DIR = pathlib.Path(os.getcwd())
 root_dir = DIR / "samples" / "CRM"
+SAMPLERATE = 40000
+slab.set_default_samplerate(SAMPLERATE)
+meter = pyln.Meter(SAMPLERATE, block_size=0.200)
 
 
 def create_name(talker, call_sign, colour, number):
@@ -27,11 +31,14 @@ def value_to_key(dictionary, value):
 
 
 def normalise_sound(sound):
-    sound.data = sound.data / np.max(sound.data)
-    return sound
+    loudness = meter.integrated_loudness(sound.data)
+    normalised_sound = slab.Binaural(pyln.normalize.loudness(sound.data, loudness, -20))
+    return normalised_sound
 
 
-subject_ID = 'jakab'
+subject_ID = 'test'
+channel_setup_seq = slab.Trialsequence(["mono", "left", "right"], n_reps=22)
+# channel_setup_seq = slab.Trialsequence(["left_target", "right_target"], n_reps=22)
 slab.ResultsFile.results_folder = 'results'
 results_file = slab.ResultsFile()
 seq = slab.Trialsequence(segment_lengths, n_reps=5)
@@ -133,7 +140,7 @@ def reverse_sound(sound, segment_length):
     return reversed_sound
 
 
-def combine_sounds(target, masker, add_helicopter=True):
+def combine_sounds(target, masker, add_helicopter=False):
     max_duration = max([masker.n_samples, target.n_samples])
     combined = slab.Binaural.silence(duration=max_duration, samplerate=target.samplerate)
     combined.data[:target.n_samples] = target.data
@@ -143,6 +150,28 @@ def combine_sounds(target, masker, add_helicopter=True):
         combined.data += helicopter
     combined = normalise_sound(combined)
     return combined
+
+
+def select_channels(target, masker, channel_setup="mono"):
+    target.level += target_level_diff
+    max_duration = max([masker.n_samples, target.n_samples])
+    sound_channeled = slab.Binaural.silence(duration=max_duration, samplerate=target.samplerate)
+    if channel_setup == "mono":
+        sound_channeled = combine_sounds(target, masker)
+    elif channel_setup == "left":
+        combined = combine_sounds(target, masker)
+        sound_channeled.data[:, 0] = combined.data[:, 0]
+    elif channel_setup == "right":
+        combined = combine_sounds(target, masker)
+        sound_channeled.data[:, 1] = combined.data[:, 1]
+    elif channel_setup == "left_target":
+        sound_channeled.data[:target.n_samples, 0] = target.data[:, 0]
+        sound_channeled.data[:masker.n_samples, 1] = masker.data[:, 1]
+    elif channel_setup == "right_target":
+        sound_channeled.data[:target.n_samples, 1] = target.data[:, 1]
+        sound_channeled.data[:masker.n_samples, 0] = masker.data[:, 0]
+    sound_channeled = normalise_sound(sound_channeled)
+    return sound_channeled
 
 
 def get_score(response, task):
@@ -160,30 +189,32 @@ def get_score(response, task):
     return score
 
 
-def run_masking_trial(response=None, add_helicopter=False):
+def run_masking_trial(response=None):
     global THIS_TRIAL
     global task
     if response is not None:
         response["score"] = get_score(response, task)
         results_file.write(response, tag="response")
-        print(THIS_TRIAL - 1, "Response:", response["response_colour"], response["response_number"])
-        print('')
-    if THIS_TRIAL < seq.n_trials:
+        if THIS_TRIAL <= seq.n_trials:
+            print(THIS_TRIAL - 1, "Response:", response["response_colour"], response["response_number"])
+            print('')
+    if THIS_TRIAL <= seq.n_trials:
         master.update()
     else:
         master.destroy()
+    channel_setup = channel_setup_seq.get_future_trial(THIS_TRIAL)
     target_params = get_params(stim_type="target")
     masker_params = get_params(stim_type="masker")
     target = get_stimulus(target_params)
     target = reverse_sound(target, target_params["segment_length"])
     masker = get_stimulus(masker_params)
     masker = reverse_sound(masker, masker_params["segment_length"])
-    target.level += target_level_diff
-    combined = combine_sounds(target, masker, add_helicopter=add_helicopter)
+    output = select_channels(target, masker, channel_setup=channel_setup)
     task = {
         "subject_ID": subject_ID,
         "target_segment_length": target_segment_length,
         "masker_segment_length": masker_params["segment_length"],
+        "channel_setup": channel_setup,
         "target_talker": target_params["talker"],
         "target_gender": target_params["gender"],
         "masker_talker": masker_params["talker"],
@@ -196,7 +227,7 @@ def run_masking_trial(response=None, add_helicopter=False):
     }
     results_file.write(task, tag="task")
     print(THIS_TRIAL, "Task:    ", task["task_colour"], task["task_number"])
-    combined.play()
+    output.play()
     THIS_TRIAL += 1
 
 
@@ -297,6 +328,6 @@ def run_single_talker_experiment():
     master.mainloop()
 
 
-# run_masking_experiment()
-run_single_talker_experiment()
+run_masking_experiment()
+# run_single_talker_experiment()
 
