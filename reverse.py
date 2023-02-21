@@ -6,6 +6,7 @@ import pathlib
 import numpy as np
 from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
 
 SAMPLERATE = 40000
 slab.Signal.set_default_samplerate(SAMPLERATE)
@@ -14,6 +15,7 @@ root_dir = DIR / "samples" / "CRM" / "original"
 files = os.listdir(root_dir)
 segments = [20, 40, 60, 80, 100, 120, 140]
 modulation_type = "reversed"
+file = files[0]
 
 for file in files:
     file_path = pathlib.Path(root_dir / file)
