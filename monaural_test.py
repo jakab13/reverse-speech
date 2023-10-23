@@ -4,7 +4,7 @@ import pathlib
 import random
 import numpy as np
 import tkinter
-from tkmacosx import Button
+# from tkmacosx import Button
 from functools import partial
 from config import *
 from utils import *
@@ -27,7 +27,7 @@ task = dict()
 master = tkinter.Tk()
 master.title("Responses")
 master.geometry("800x500")
-myFont = tkinter.font.Font(size=30)
+myFont = tkinter.font.Font(size=20)
 
 
 def generate_helicopter(duration=1.0, spike_width=0.005, segment_length=0.02, samplerate=44100, spike_idx_array=None):
@@ -209,7 +209,7 @@ def generate_numpad():
         for row, n_name in enumerate(numbers):
             response_params = {"response_colour": c_name, "response_number": n_name}
             button_text = name_to_int(numbers[n_name])
-            buttons[column][row] = Button(master,
+            buttons[column][row] = tkinter.Button(master,
                                           text=str(button_text),
                                           bg=col_to_hex[c_name],
                                           command=partial(run_masking_trial, response_params))
@@ -220,19 +220,19 @@ def generate_numpad():
 def generate_name_and_numpad():
     buttons = [[0 for x in range(len(numbers))] for y in range(len(colours) + 1)]
     for row, call_sign in enumerate(call_signs):
-        buttons[0][row] = Button(master,
+        buttons[0][row] = tkinter.Button(master,
                                  text=call_sign,
-                                 command=partial(set_call_sign, call_sign))
+                                         command=partial(set_call_sign, call_sign))
         buttons[0][row]['font'] = myFont
         buttons[0][row].grid(row=row, column=0)
     for column, c_name in enumerate(colours):
         for row, n_name in enumerate(numbers):
             response_params = {"response_colour": c_name, "response_number": n_name}
             button_text = name_to_int(numbers[n_name])
-            buttons[column + 1][row] = Button(master,
+            buttons[column + 1][row] = tkinter.Button(master,
                                               text=str(button_text),
                                               bg=col_to_hex[c_name],
-                                              command=partial(run_single_talker_trial, response_params))
+                                                      command=partial(run_single_talker_trial, response_params))
             buttons[column + 1][row]['font'] = myFont
             buttons[column + 1][row].grid(row=row, column=column + 1)
 
