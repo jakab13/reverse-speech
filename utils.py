@@ -1,0 +1,116 @@
+import slab
+import os
+import pathlib
+import random
+import numpy as np
+import tkinter
+from tkmacosx import Button
+from functools import partial
+from config import *
+import pyloudnorm as pyln
+import pickle
+
+SAMPLERATE = 40000
+meter = pyln.Meter(SAMPLERATE, block_size=0.200)
+
+DIR = pathlib.Path(os.getcwd())
+root_dir = DIR / "samples" / "CRM"
+
+
+def create_name(talker, call_sign, colour, number):
+    base_string = talker + call_sign + colour + number
+    name = base_string
+    return name
+
+
+def name_to_int(name):
+    return int(name[-1]) + 1
+
+
+def value_to_key(dictionary, value):
+    return list(dictionary.keys())[list(numbers.values()).index(value)]
+
+
+def normalise_sound(sound):
+    loudness = meter.integrated_loudness(sound.data)
+    normalised_sound = slab.Binaural(pyln.normalize.loudness(sound.data, loudness, -20))
+    return normalised_sound
+
+def get_stimulus(params):
+    talker, call_sign, colour, number, segment_length = \
+        params["talker"], params["call_sign"], params["colour"], params["number"], params["segment_length"]
+    file_name = create_name(talker, call_sign, colour, number)
+    path = root_dir / "original" / str(file_name + ".wav")
+    stimulus = slab.Binaural(path)
+    return stimulus
+
+
+def get_gender_mix(gender1, gender2):
+    if gender1 == gender2:
+        mix = gender1
+    else:
+        mix = "opposite"
+    return mix
+
+
+def get_params(stim_type="target", filter_params=None):
+    global THIS_TRIAL
+    params = {"stim_type": stim_type}
+    # segment_length = seq.get_future_trial(THIS_TRIAL)
+    segment_length = random.choice(segment_lengths)
+    if isinstance(filter_params, dict) and "gender" in filter_params:
+        gender = filter_params["gender"]
+        talker, _ = random.choice([(k, v) for (k, v) in talkers.items() if v == gender])
+    else:
+        talker, gender = random.choice(list(talkers.items()))
+    if stim_type == "target":
+        call_sign = call_sign_target  # Baron
+        segment_length = target_segment_length
+    elif stim_type == "random":
+        call_sign = random.choice(list(call_signs.values()))
+    else:
+        call_sign = random.choice([cs_id for (cs, cs_id) in call_signs.items() if cs != "Baron"])
+    colour = random.choice(list(colours.values()))
+    number = random.choice([num_string for num_name, num_string in numbers.items() if num_name != "Seven"])
+    params["talker"] = talker
+    params["gender"] = gender
+    params["call_sign"] = call_sign
+    params["colour"] = colour
+    params["number"] = number
+    params["segment_length"] = segment_length
+    return params
+
+
+def random_stimulus():
+    params = get_params()
+    stimulus = get_stimulus(params)
+    return stimulus, params
+
+
+def save_ILS():
+    hrtf = slab.hrtf.HRTF.kemar()
+    ils = slab.Binaural.make_interaural_level_spectrum(hrtf)
+    pickle.dump(ils, open('ils.pickle', 'wb'))  # save using pickle
+
+
+def reverse_sound(sound, segment_length, overlap=0.005):
+    if segment_length == 0:
+        return sound
+    segment_length = slab.Signal.in_samples(segment_length, sound.samplerate)
+    overlap = int(overlap * sound.samplerate)
+    reversed_sound = slab.Binaural.silence(duration=sound.n_samples, samplerate=sound.samplerate)
+    idx = random.randrange(segment_length) - segment_length
+    while idx < sound.n_samples:
+        start = max(idx - overlap, 0)
+        end = min(idx + segment_length + overlap, sound.n_samples)
+        snippet = sound.data[start:end]
+        reversed_snippet = slab.Binaural(snippet[::-1], samplerate=sound.samplerate)
+        if reversed_snippet.n_samples > overlap * 2:
+            reversed_snippet = reversed_snippet.ramp(duration=overlap)
+        reversed_sound.data[start:end] += reversed_snippet
+        idx += segment_length
+    reversed_sound = reversed_sound.ramp(duration=overlap, when="offset")
+    reversed_sound.left = reversed_sound.left.filter(frequency=8000, kind="lp")
+    reversed_sound.right = reversed_sound.right.filter(frequency=8000, kind="lp")
+    return reversed_sound
+

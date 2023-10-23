@@ -3,6 +3,8 @@ import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import scipy.stats
+import seaborn as sns
 from scipy.optimize import curve_fit
 from scipy.interpolate import interp1d
 
@@ -10,9 +12,9 @@ DIR = pathlib.Path(os.getcwd())
 results_folder = DIR / "Results"
 master_folder = results_folder / "master"
 single_talker_file = master_folder / "MASTER_results_single-talker.csv"
-# multi_talker_file = master_folder / "MASTER_results_multi-talker.csv"
+multi_talker_file = master_folder / "MASTER_results_multi-talker.csv"
 df_single_talker = pd.read_csv(single_talker_file)
-# df_multi_talker = pd.read_csv(multi_talker_file)
+df_multi_talker = pd.read_csv(multi_talker_file)
 
 mean_syllable_duration = 0.19521027563553273
 std_syllable_duration = 0.0812738311185978
@@ -20,7 +22,7 @@ std_syllable_duration = 0.0812738311185978
 subject_IDs = df_single_talker["subject_ID"].unique()
 
 # Per subject
-subject_ID = "gina"
+subject_ID = "hannah"
 df_single_talker_subject = df_single_talker.loc[(df_single_talker["subject_ID"] == subject_ID)]
 x_data = range(15, 200, 15)
 for idx in range(0, len(df_single_talker_subject), 65):
@@ -90,3 +92,41 @@ plt.xlabel("Segment length (ms)")
 plt.ylabel("Correct (%)")
 plt.legend()
 plt.show()
+
+
+def sigmoid(x):
+    y = 1 / (1 + np.exp(x))
+    return y
+
+
+fig, ax = plt.subplots(1)
+
+for subject_ID in subject_IDs:
+    sns.regplot(
+        x="single_talker_segment_length",
+        y="score",
+        data=df_single_talker.loc[(df_single_talker["subject_ID"] == subject_ID)],
+        logistic=True,
+        scatter=False,
+        ax=ax,
+        label=subject_ID
+    )
+sns.scatterplot(x="single_talker_segment_length", y="score", data=df_single_talker.groupby(["subject_ID", "single_talker_segment_length"]).mean(), hue="subject_ID")
+sns.lmplot(x="single_talker_segment_length", y="score", data=df_single_talker, hue="subject_ID", scatter=False, logistic=True)
+ax.set(xlabel='Segment length (ms)', ylabel='Correct (%)')
+plt.title("Single talker intelligibility")
+# plt.legend()
+plt.show()
+
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+
+data = df_single_talker.groupby(["subject_ID", "single_talker_segment_length"]).mean()
+data.columns = ["subject_ID", "single_talker_segment_length", "score"]
+md = smf.mixedlm("score ~ single_talker_segment_length + C(subject_ID)",
+                 data=data,
+                 groups="subject_ID"
+                 )
+mdf = md.fit()
+print(mdf.summary())
+

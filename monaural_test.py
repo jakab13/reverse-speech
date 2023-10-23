@@ -7,41 +7,20 @@ import tkinter
 from tkmacosx import Button
 from functools import partial
 from config import *
-import pyloudnorm as pyln
+from utils import *
 
-DIR = pathlib.Path(os.getcwd())
-root_dir = DIR / "samples" / "CRM"
 SAMPLERATE = 40000
 slab.set_default_samplerate(SAMPLERATE)
-meter = pyln.Meter(SAMPLERATE, block_size=0.200)
 
-
-def create_name(talker, call_sign, colour, number):
-    base_string = talker + call_sign + colour + number
-    name = base_string
-    return name
-
-
-def name_to_int(name):
-    return int(name[-1]) + 1
-
-
-def value_to_key(dictionary, value):
-    return list(dictionary.keys())[list(numbers.values()).index(value)]
-
-
-def normalise_sound(sound):
-    loudness = meter.integrated_loudness(sound.data)
-    normalised_sound = slab.Binaural(pyln.normalize.loudness(sound.data, loudness, -20))
-    return normalised_sound
-
+ils = pickle.load(open('ils.pickle', 'rb'))
 
 subject_ID = 'test'
-channel_setup_seq = slab.Trialsequence(["mono", "left", "right"], n_reps=22)
-# channel_setup_seq = slab.Trialsequence(["left_target", "right_target"], n_reps=22)
+# channel_setup_seq = slab.Trialsequence(["left", "right"], n_reps=33)
+channel_setup_seq = slab.Trialsequence(["left_target", "right_target"], n_reps=56)
 slab.ResultsFile.results_folder = 'results'
 results_file = slab.ResultsFile()
-seq = slab.Trialsequence(segment_lengths, n_reps=5)
+stairs = slab.Staircase(start_val=250, n_reversals=12, step_sizes=[50, 40, 30, 20, 10], min_val=20)
+seq = slab.Trialsequence(segment_lengths, n_reps=10)
 THIS_TRIAL = 0
 CALL_SIGN = None
 task = dict()
@@ -69,75 +48,6 @@ def generate_helicopter(duration=1.0, spike_width=0.005, segment_length=0.02, sa
         helicopter.data[start:end] = spike.data
     return helicopter
 
-
-def get_stimulus(params):
-    talker, call_sign, colour, number, segment_length = \
-        params["talker"], params["call_sign"], params["colour"], params["number"], params["segment_length"]
-    file_name = create_name(talker, call_sign, colour, number)
-    path = root_dir / "original" / str(file_name + ".wav")
-    stimulus = slab.Binaural(path)
-    return stimulus
-
-
-def get_gender_mix(gender1, gender2):
-    if gender1 == gender2:
-        mix = gender1
-    else:
-        mix = "opposite"
-    return mix
-
-
-def get_params(stim_type="target", filter_params=None):
-    global THIS_TRIAL
-    params = {"stim_type": stim_type}
-    segment_length = seq.get_future_trial(THIS_TRIAL)
-    if isinstance(filter_params, dict) and "gender" in filter_params:
-        gender = filter_params["gender"]
-        talker, _ = random.choice([(k, v) for (k, v) in talkers.items() if v == gender])
-    else:
-        talker, gender = random.choice(list(talkers.items()))
-    if stim_type == "target":
-        call_sign = call_sign_target  # Baron
-        segment_length = target_segment_length
-    elif stim_type == "random":
-        call_sign = random.choice(list(call_signs.values()))
-    else:
-        call_sign = random.choice([cs_id for (cs, cs_id) in call_signs.items() if cs != "Baron"])
-    colour = random.choice(list(colours.values()))
-    number = random.choice([num_string for num_name, num_string in numbers.items() if num_name != "Seven"])
-    params["talker"] = talker
-    params["gender"] = gender
-    params["call_sign"] = call_sign
-    params["colour"] = colour
-    params["number"] = number
-    params["segment_length"] = segment_length
-    return params
-
-
-def random_stimulus():
-    params = get_params()
-    stimulus = get_stimulus(params)
-    return stimulus, params
-
-
-def reverse_sound(sound, segment_length):
-    segment_length = slab.Signal.in_samples(segment_length, sound.samplerate)
-    overlap = int(0.005 * sound.samplerate)
-    reversed_sound = slab.Binaural.silence(duration=sound.n_samples, samplerate=sound.samplerate)
-    idx = 0
-    while idx < sound.n_samples:
-        start = idx - overlap if idx > overlap else idx
-        end = idx + segment_length + overlap if idx < sound.n_samples - segment_length - overlap else sound.n_samples
-        snippet = sound.data[start:end]
-        reversed_snippet = slab.Binaural(snippet[::-1], samplerate=sound.samplerate)
-        if reversed_snippet.n_samples > overlap * 2:
-            reversed_snippet = reversed_snippet.ramp(duration=overlap)
-        reversed_sound.data[start:end] += reversed_snippet
-        idx += segment_length
-    reversed_sound = reversed_sound.ramp(duration=overlap, when="offset")
-    reversed_sound.left = reversed_sound.left.filter(frequency=8000, kind="lp")
-    reversed_sound.right = reversed_sound.right.filter(frequency=8000, kind="lp")
-    return reversed_sound
 
 
 def combine_sounds(target, masker, add_helicopter=False):
@@ -192,29 +102,51 @@ def get_score(response, task):
 def run_masking_trial(response=None):
     global THIS_TRIAL
     global task
+    global stairs
+    global masker_azimuth
+    global masker_segment_length
     if response is not None:
         response["score"] = get_score(response, task)
+        stairs.add_response(response["score"] == 1)
+        stairs.plot()
+        results_file.write(stairs, tag="stairs")
+        results_file.write(stairs.threshold(), tag="threshold")
         results_file.write(response, tag="response")
-        if THIS_TRIAL <= seq.n_trials:
+        # if THIS_TRIAL <= seq.n_trials:
+        if not stairs.finished:
             print(THIS_TRIAL - 1, "Response:", response["response_colour"], response["response_number"])
+            # print("Correct:", response["score"] == 1)
+            # print("Stairs", stairs.data)
             print('')
-    if THIS_TRIAL <= seq.n_trials:
+    # if THIS_TRIAL <= seq.n_trials:
+    #     master.update()
+    # else:
+    #     master.destroy()
+    if not stairs.finished:
         master.update()
     else:
         master.destroy()
-    channel_setup = channel_setup_seq.get_future_trial(THIS_TRIAL)
-    target_params = get_params(stim_type="target")
-    masker_params = get_params(stim_type="masker")
+    target_params = get_params(stim_type="masker")
+    masker_params = get_params(stim_type="masker", filter_params={"gender": target_params["gender"]})
+    # masker_params = get_params(stim_type="masker")
     target = get_stimulus(target_params)
     target = reverse_sound(target, target_params["segment_length"])
+    target = target.externalize()
     masker = get_stimulus(masker_params)
-    masker = reverse_sound(masker, masker_params["segment_length"])
-    output = select_channels(target, masker, channel_setup=channel_setup)
+    masker_segment_length = stairs.__next__() / 1000
+    masker = reverse_sound(masker, masker_segment_length)
+    masker = masker.at_azimuth(masker_azimuth, ils=ils)
+    masker = masker.externalize()
+    max_duration = max([masker.n_samples, target.n_samples])
+    combined = slab.Binaural.silence(duration=max_duration, samplerate=target.samplerate)
+    combined.data[:target.n_samples] = target.data / np.amax(np.abs(target.data))
+    combined.data[:masker.n_samples] += masker.data / np.amax(np.abs(masker.data))
+    combined.data = combined.data / np.amax(np.abs(combined.data))
     task = {
         "subject_ID": subject_ID,
         "target_segment_length": target_segment_length,
         "masker_segment_length": masker_params["segment_length"],
-        "channel_setup": channel_setup,
+        "masker_azimuth": masker_azimuth,
         "target_talker": target_params["talker"],
         "target_gender": target_params["gender"],
         "masker_talker": masker_params["talker"],
@@ -227,7 +159,8 @@ def run_masking_trial(response=None):
     }
     results_file.write(task, tag="task")
     print(THIS_TRIAL, "Task:    ", task["task_colour"], task["task_number"])
-    output.play()
+    print("Masker segment length:", masker_segment_length)
+    combined.play()
     THIS_TRIAL += 1
 
 
@@ -328,6 +261,23 @@ def run_single_talker_experiment():
     master.mainloop()
 
 
-run_masking_experiment()
+def run_masking_azimuth_experiment():
+    global THIS_TRIAL
+    global results_file
+    global stairs
+    global masker_azimuth
+    global masker_segment_length
+    results_filename = "masking-azimuth"
+    results_filename += "_target-segment-" + str(int(target_segment_length * 1000)) + "ms"
+    results_file = slab.ResultsFile(subject=subject_ID, filename=results_filename)
+    THIS_TRIAL = 1
+    generate_numpad()
+    masker_azimuth = 90
+    run_masking_trial()
+    master.mainloop()
+
+
+run_masking_azimuth_experiment()
+# run_masking_experiment()
 # run_single_talker_experiment()
 
