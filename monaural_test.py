@@ -4,7 +4,7 @@ import pathlib
 import random
 import numpy as np
 import tkinter
-# from tkmacosx import Button
+from tkmacosx import Button
 from functools import partial
 from config import *
 from utils import *
@@ -20,7 +20,7 @@ channel_setup_seq = slab.Trialsequence(["left_target", "right_target"], n_reps=5
 slab.ResultsFile.results_folder = 'results'
 results_file = slab.ResultsFile()
 stairs = slab.Staircase(start_val=250, n_reversals=12, step_sizes=[50, 40, 30, 20, 10], min_val=20)
-seq = slab.Trialsequence(segment_lengths, n_reps=10)
+seq = slab.Trialsequence(SEGMENT_LENGTHS, n_reps=10)
 THIS_TRIAL = 0
 CALL_SIGN = None
 task = dict()
@@ -56,7 +56,7 @@ def combine_sounds(target, masker, add_helicopter=False):
     combined.data[:target.n_samples] = target.data
     combined.data[:masker.n_samples] += masker.data
     if add_helicopter:
-        helicopter = generate_helicopter(duration=max_duration, segment_length=min(segment_lengths), samplerate=target.samplerate)
+        helicopter = generate_helicopter(duration=max_duration, segment_length=min(SEGMENT_LENGTHS), samplerate=target.samplerate)
         combined.data += helicopter
     combined = normalise_sound(combined)
     return combined
@@ -87,15 +87,15 @@ def select_channels(target, masker, channel_setup="mono"):
 def get_score(response, task):
     score = 0
     if "response_call_sign" in response:
-        denum = len(call_signs) + len(colours) + len(numbers) - 1
+        denum = len(CALL_SIGNS) + len(COLOURS) + len(NUMBERS) - 1
         if response["response_call_sign"] == task["task_call_sign"]:
-            score += len(call_signs) / denum
+            score += len(CALL_SIGNS) / denum
     else:
-        denum = len(colours) + len(numbers) - 1
+        denum = len(COLOURS) + len(NUMBERS) - 1
     if response["response_colour"] == task["task_colour"]:
-        score += len(colours) / denum
+        score += len(COLOURS) / denum
     if response["response_number"] == task["task_number"]:
-        score += (len(numbers) - 1) / denum
+        score += (len(NUMBERS) - 1) / denum
     return score
 
 
@@ -127,7 +127,7 @@ def run_masking_trial(response=None):
     else:
         master.destroy()
     target_params = get_params(stim_type="masker")
-    masker_params = get_params(stim_type="masker", filter_params={"gender": target_params["gender"]})
+    masker_params = get_params(stim_type="masker")
     # masker_params = get_params(stim_type="masker")
     target = get_stimulus(target_params)
     target = reverse_sound(target, target_params["segment_length"])
@@ -144,7 +144,7 @@ def run_masking_trial(response=None):
     combined.data = combined.data / np.amax(np.abs(combined.data))
     task = {
         "subject_ID": subject_ID,
-        "target_segment_length": target_segment_length,
+        "target_segment_length": TARGET_SEGMENT_LENGTH,
         "masker_segment_length": masker_params["segment_length"],
         "masker_azimuth": masker_azimuth,
         "target_talker": target_params["talker"],
@@ -152,9 +152,9 @@ def run_masking_trial(response=None):
         "masker_talker": masker_params["talker"],
         "masker_gender": masker_params["gender"],
         "gender_mix": get_gender_mix(target_params["gender"], masker_params["gender"]),
-        "masker_call_sign": value_to_key(call_signs, masker_params["call_sign"]),
-        "task_colour": value_to_key(colours, target_params["colour"]),
-        "task_number": value_to_key(numbers, target_params["number"]),
+        "masker_call_sign": value_to_key(CALL_SIGNS, masker_params["call_sign"]),
+        "task_colour": value_to_key(COLOURS, target_params["colour"]),
+        "task_number": value_to_key(NUMBERS, target_params["number"]),
         "target_level_diff": target_level_diff
     }
     results_file.write(task, tag="task")
@@ -188,9 +188,9 @@ def run_single_talker_trial(response=None):
         "single_talker_segment_length": single_talker_params["segment_length"],
         "single_talker": single_talker_params["talker"],
         "single_talker_gender": single_talker_params["gender"],
-        "task_call_sign": value_to_key(call_signs, single_talker_params["call_sign"]),
-        "task_colour": value_to_key(colours, single_talker_params["colour"]),
-        "task_number": value_to_key(numbers, single_talker_params["number"])
+        "task_call_sign": value_to_key(CALL_SIGNS, single_talker_params["call_sign"]),
+        "task_colour": value_to_key(COLOURS, single_talker_params["colour"]),
+        "task_number": value_to_key(NUMBERS, single_talker_params["number"])
     }
     results_file.write(task, tag="task")
     print(THIS_TRIAL, "Task:    ", task["task_call_sign"], task["task_colour"], task["task_number"])
@@ -204,35 +204,35 @@ def set_call_sign(call_sign):
 
 
 def generate_numpad():
-    buttons = [[0 for x in range(len(numbers))] for y in range(len(colours))]
-    for column, c_name in enumerate(colours):
-        for row, n_name in enumerate(numbers):
+    buttons = [[0 for x in range(len(NUMBERS))] for y in range(len(COLOURS))]
+    for column, c_name in enumerate(COLOURS):
+        for row, n_name in enumerate(NUMBERS):
             response_params = {"response_colour": c_name, "response_number": n_name}
-            button_text = name_to_int(numbers[n_name])
-            buttons[column][row] = tkinter.Button(master,
+            button_text = name_to_int(NUMBERS[n_name])
+            buttons[column][row] = Button(master,
                                           text=str(button_text),
-                                          bg=col_to_hex[c_name],
+                                          bg=COL_TO_HEX[c_name],
                                           command=partial(run_masking_trial, response_params))
             buttons[column][row]['font'] = myFont
             buttons[column][row].grid(row=row, column=column)
 
 
 def generate_name_and_numpad():
-    buttons = [[0 for x in range(len(numbers))] for y in range(len(colours) + 1)]
-    for row, call_sign in enumerate(call_signs):
-        buttons[0][row] = tkinter.Button(master,
+    buttons = [[0 for x in range(len(NUMBERS))] for y in range(len(COLOURS) + 1)]
+    for row, call_sign in enumerate(CALL_SIGNS):
+        buttons[0][row] = Button(master,
                                  text=call_sign,
                                          command=partial(set_call_sign, call_sign))
         buttons[0][row]['font'] = myFont
         buttons[0][row].grid(row=row, column=0)
-    for column, c_name in enumerate(colours):
-        for row, n_name in enumerate(numbers):
+    for column, c_name in enumerate(COLOURS):
+        for row, n_name in enumerate(NUMBERS):
             response_params = {"response_colour": c_name, "response_number": n_name}
-            button_text = name_to_int(numbers[n_name])
-            buttons[column + 1][row] = tkinter.Button(master,
+            button_text = name_to_int(NUMBERS[n_name])
+            buttons[column + 1][row] = Button(master,
                                               text=str(button_text),
-                                              bg=col_to_hex[c_name],
-                                                      command=partial(run_single_talker_trial, response_params))
+                                              bg=COL_TO_HEX[c_name],
+                                              command=partial(run_single_talker_trial, response_params))
             buttons[column + 1][row]['font'] = myFont
             buttons[column + 1][row].grid(row=row, column=column + 1)
 
@@ -241,7 +241,7 @@ def run_masking_experiment():
     global THIS_TRIAL
     global results_file
     results_filename = "multi-talker"
-    results_filename += "_target-segment-" + str(int(target_segment_length * 1000)) + "ms"
+    results_filename += "_target-segment-" + str(int(TARGET_SEGMENT_LENGTH * 1000)) + "ms"
     results_filename += "_SNR-" + str(target_level_diff) + "dB"
     results_file = slab.ResultsFile(subject=subject_ID, filename=results_filename)
     THIS_TRIAL = 1
@@ -268,7 +268,7 @@ def run_masking_azimuth_experiment():
     global masker_azimuth
     global masker_segment_length
     results_filename = "masking-azimuth"
-    results_filename += "_target-segment-" + str(int(target_segment_length * 1000)) + "ms"
+    results_filename += "_target-segment-" + str(int(TARGET_SEGMENT_LENGTH * 1000)) + "ms"
     results_file = slab.ResultsFile(subject=subject_ID, filename=results_filename)
     THIS_TRIAL = 1
     generate_numpad()
